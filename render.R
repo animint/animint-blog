@@ -1,4 +1,4 @@
-pkgs <- c("animint2","remotes")
+pkgs <- c("animint2","remotes","quarto")
 ins.mat <- installed.packages()
 missing.pkgs <- setdiff(pkgs, rownames(ins.mat))
 install.packages(missing.pkgs)
