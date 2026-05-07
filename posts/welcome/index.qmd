@@ -5,8 +5,59 @@ date: "2026-05-04"
 categories: [news]
 ---
 
-This is the first post in a Quarto blog. Welcome!
+This is the first post in our new Animint blog. Welcome!
 
-![](thumbnail.jpg)
+Here is a demo of an animint:
 
-Since this post doesn't specify an explicit `image`, the first image in the post will be used in the listing page of posts.
+```{r animint-test}
+library(animint2)
+data(WorldBank)
+animint(
+  timeSeries=ggplot()+
+    theme_animint(width=1000, last_in_row=TRUE)+
+    theme(legend.position="none")+
+    make_tallrect(WorldBank, "year")+
+    geom_label_aligned(aes(
+      year, life.expectancy, label=country, color=region),
+      alignment="vertical",
+      hjust=1,
+      showSelected="country",
+      clickSelects="country",
+      data=subset(WorldBank,year==1960))+
+    geom_label_aligned(aes(
+      year, life.expectancy, label=country, color=region),
+      alignment="vertical",
+      hjust=0,
+      showSelected="country",
+      clickSelects="country",
+      data=subset(WorldBank,year==2011))+
+    scale_x_continuous(
+      limits=c(1950, 2020),
+      breaks=seq(1960, 2010, by=10))+
+    geom_line(aes(
+      year, life.expectancy, group=country, color=region),
+      clickSelects="country",
+      alpha_off=0.1,
+      alpha=1,
+      data=WorldBank),
+  scatter=ggplot()+
+    geom_point(aes(
+      life.expectancy, fertility.rate,
+      key=country, color=region, size=population),
+      showSelected="year",
+      clickSelects="country",
+      data=WorldBank)+
+    geom_text(aes(
+      life.expectancy, fertility.rate, label=country, key=country),
+      showSelected=c("year","country"),
+      clickSelects="country",
+      data=WorldBank)+
+    scale_size_animint(breaks=10^seq(5, 9)),
+  selector.types=list(
+    country="multiple"),
+  first=list(
+    country=c("Canada","Japan","France")),
+  duration=list(
+    year=1000)
+)
+```

@@ -14,6 +14,6 @@ format:
   html:
     theme: cosmo
     css: styles.css
-
+    page-layout: full
 
 
