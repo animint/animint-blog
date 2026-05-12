@@ -95,9 +95,3 @@ There are also indirect manipulation interactions possible, by clicking the butt
 
 Currently, the quarto rendering of animints requires a [custom render.R script](https://github.com/animint/animint-blog/blob/add-netlify/render.R), which copies the rendered animint directories to the quarto `_site` directory.
 For future posts on this blog, make sure to use one `animint()` per code chunk, and make sure that each animint code chunk has a unique name, as documented in [Section 5.2 of the Animint manual](https://animint-manual-en.netlify.app/ch05/#Rmd).
-
-````
-```{r unique-chunk-name}
-animint(......)
-```
-````
