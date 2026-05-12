@@ -2,6 +2,7 @@
 title: "About"
 image: profile.jpg
 about:
+  template: marquee
   links:
     - icon: github
       text: Github
