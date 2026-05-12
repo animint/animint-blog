@@ -1,9 +1,9 @@
 ---
-title: "Welcome To My Blog"
+title: "Animint in quarto demo"
 author: "Toby Hocking"
 date: "2026-05-04"
 image: "animint-in-quarto.png"
-categories: [news]
+categories: [code, animint]
 ---
 
 This is the first post in our new blog about the animint project. Welcome!
@@ -94,3 +94,10 @@ The animint above has two ggplots, with several kinds of direct manipulation int
 There are also indirect manipulation interactions possible, by clicking the buttons, Show selection menus, etc.
 
 Currently, the quarto rendering of animints requires a [custom render.R script](https://github.com/animint/animint-blog/blob/add-netlify/render.R), which copies the rendered animint directories to the quarto `_site` directory.
+For future posts on this blog, make sure to use one `animint()` per code chunk, and make sure that each animint code chunk has a unique name, as documented in [Section 5.2 of the Animint manual](https://animint-manual-en.netlify.app/ch05/#Rmd).
+
+````
+```{r unique-chunk-name}
+animint(......)
+```
+````

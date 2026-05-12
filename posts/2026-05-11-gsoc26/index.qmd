@@ -2,7 +2,7 @@
 title: "Welcoming GSOC 2026 contributors"
 author: "Toby Hocking"
 date: "2026-05-11"
-categories: [news, code, analysis]
+categories: [gsoc]
 image: "2026-05-11-suhaani-yufan-gaurav-nishita.png"
 ---
 
