@@ -22,4 +22,4 @@ To contribute, please send a Pull Request to the [animint-blog](https://github.c
 * other contributors should fork that repo and send a PR from the fork.
 * create a new directory under posts.
 * only commit source files (qmd/png), not rendered animint directories (please no html/js/etc files in git repo).
-
+* `animint2` is installed from github, so your code can include new features that are not yet released to CRAN.
