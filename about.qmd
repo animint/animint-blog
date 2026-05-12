@@ -2,7 +2,6 @@
 title: "About"
 image: profile.jpg
 about:
-  template: jolla
   links:
     - icon: github
       text: Github
