@@ -1,0 +1,97 @@
+---
+title: "Animint in quarto demo"
+author: "Toby Hocking"
+date: "2026-05-04"
+image: "animint-in-quarto.png"
+categories: [code, animint]
+---
+
+This is the first post in our new blog about the animint project. Welcome!
+
+The purpose of the animint project is to maintain the `animint2` R package, for creating animated interactive data visualizations using R ggplot code.
+To learn how to create animated interactive data visualizations, please read
+
+* The online manual, [Animated interactive data visualization using animint2 in R](https://animint-manual-en.netlify.app/), recently ported to quarto for rendering and Netlify for deployment ([Video](https://youtu.be/W8ZqRq5TzPk), [Slides](https://docs.google.com/presentation/d/1JxfQnova7WlVuIyVXVNIAfogrqodBOx5kMWwj7DUiJg) from my webinar last week about how to set that up).
+* Or its French translation, [Visualisation interactive de données dans R avec animint2](https://animint-manual-fr.netlify.app/)
+
+Below is a demo of an animint of data from the World Bank.
+Since `animint2` is a fork of `ggplot2` (thanks `ggplot2` developers!),
+the code below should look familiar to you if you have some experience with `ggplot2`.
+There are some new code elements for interactive features:
+
+* `clickSelects` and `showSelected` are used to specify interactivity for each geom.
+* `theme_animint()` is used to define ggplot `width` in pixels, and layout of ggplots in a table (`last_in_row`).
+* New geoms
+  * `geom_tallrect()`, rectangle spanning the entire vertical range (no need to specify ymin and ymax).
+  * `geom_label_aligned()`, readable text labels which avoid vertical or horizontal collisions.
+* `make_tallrect()` and `make_text()` are functions for quickly making interactive geoms (tallrect for selecting year, text for showing selected year).
+* `scale_size_animint()` draws a size scale with units in pixels.
+* `selector.types` option list specifies single or multiple selection.
+* `first` option list specifies the selection when the data viz is first rendered.
+* `duration` option list and `aes(key)` specify smooth transitions.
+* `time` option list specifies animation.
+
+```{r animint-test}
+library(animint2)
+data(WorldBank)
+animint(
+  timeSeries=ggplot()+
+    theme_animint(width=1000, last_in_row=TRUE)+
+    theme(legend.position="none")+
+    make_tallrect(WorldBank, "year")+
+    geom_label_aligned(aes(
+      year, life.expectancy, label=country, color=region,
+      hjust=ifelse(year==1960, 1, 0)),
+      alignment="vertical",
+      showSelected=c("region","country"),
+      clickSelects="country",
+      data=subset(WorldBank, year %in% c(1960, 2011)))+
+    scale_x_continuous(
+      limits=c(1950, 2020),
+      breaks=seq(1960, 2010, by=10))+
+    scale_y_continuous(breaks=seq(10, 100, by=10))+
+    geom_line(aes(
+      year, life.expectancy, group=country, color=region),
+      clickSelects="country",
+      showSelected="region",
+      alpha=1,       # opacity when selected
+      alpha_off=0.1, # opacity when not selected
+      data=WorldBank),
+  scatter=ggplot()+
+    geom_point(aes(
+      life.expectancy, fertility.rate,
+      key=country, color=region, size=population),
+      showSelected="year",
+      clickSelects="country",
+      chunk_vars=character(),
+      data=WorldBank)+
+    geom_text(aes(
+      life.expectancy, fertility.rate, label=country, key=country),
+      showSelected=c("region","year","country"),
+      clickSelects="country",
+      chunk_vars=character(),
+      data=WorldBank)+
+    make_text(WorldBank, 55, 9, "year")+
+    scale_x_continuous(breaks=seq(10, 100, by=10))+
+    scale_y_continuous(breaks=seq(1, 10))+
+    scale_size_animint(breaks=10^seq(5, 9)),
+  selector.types=list(country="multiple"),
+  first=list(country=c("Canada","Japan","France")),
+  duration=list(year=500),
+  time=list(variable="year", ms=1000)
+)
+```
+
+The animint above has two ggplots, with several kinds of direct manipulation interactions:
+
+* the top ggplot shows time series of life expectancy, one curve per country.
+  * click curves or text labels to select or de-select a country.
+  * click grey bars in background to select a year.
+* the bottom ggplot is a scatterplot showing the relationship of life expectancy and fertility rate, for the currently selected year.
+  * click a dots or text to select or de-select a country.
+  * click the legend to select or de-select a region.
+
+There are also indirect manipulation interactions possible, by clicking the buttons, Show selection menus, etc.
+
+Currently, the quarto rendering of animints requires a [custom render.R script](https://github.com/animint/animint-blog/blob/add-netlify/render.R), which copies the rendered animint directories to the quarto `_site` directory.
+For future posts on this blog, make sure to use one `animint()` per code chunk, and make sure that each animint code chunk has a unique name, as documented in [Section 5.2 of the Animint manual](https://animint-manual-en.netlify.app/ch05/#Rmd).

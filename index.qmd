@@ -1,5 +1,5 @@
 ---
-title: "aniblog"
+title: "Recent blog posts"
 listing:
   contents: posts
   sort: "date desc"
