@@ -1,0 +1,235 @@
+---
+title: "Drawing polygons with holes in animint2"
+author: "Nishita Shah"
+date: "2026-08-21"
+categories: [gsoc, animint]
+---
+
+During [Google Summer of Code 2026](https://github.com/animint/animint2/issues/322) I worked on [animint2](https://github.com/animint/animint2), an R package for animated, interactive grammar-of-graphics visualizations that render in the browser with D3.
+
+One limitation was that `geom_polygon()` could draw filled shapes, but **not polygons with holes**—for example a country with an inland lake, or a region with an inner cutout. That was [issue #252](https://github.com/animint/animint2/issues/252). The fix is now merged in [PR #328](https://github.com/animint/animint2/pull/328).
+
+Hover the plot below. Tooltips appear on the filled blue regions, and stay off inside holes and on the background.
+
+```{r contour-holes}
+library(animint2)
+
+m.list <- list(
+  island=rbind(
+    c(0,0,0,0,0,0,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,0,0,0,1,0),
+    c(0,1,0,1,0,1,0),
+    c(0,1,0,0,0,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,0,0,0,0,0,0)),
+  hole=rbind(
+    c(0,0,0,0,0,0,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,0,0,0,1,0),
+    c(0,1,0,0,0,1,0),
+    c(0,1,0,0,0,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,0,0,0,0,0,0)),
+  filled=rbind(
+    c(0,0,0,0,0,0,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,1,1,1,1,1,0),
+    c(0,0,0,0,0,0,0)))
+
+poly.list <- list()
+point.list <- list()
+for(grp.i in seq_along(m.list)){
+  offset <- grp.i * 7
+  group <- names(m.list)[[grp.i]]
+  m <- m.list[[grp.i]]
+  clines <- contourLines(1:ncol(m), 1:nrow(m), m, levels=0.5)
+  poly.list[[grp.i]] <- do.call(rbind, lapply(seq_along(clines), function(subgroup){
+    data.frame(
+      subgroup=subgroup,
+      group=group,
+      x=clines[[subgroup]]$x + offset,
+      y=clines[[subgroup]]$y)
+  }))
+  point.list[[grp.i]] <- data.frame(
+    row=as.integer(row(m)),
+    col=as.integer(col(m)) + offset,
+    num=as.numeric(m),
+    group=group)
+}
+poly.df <- do.call(rbind, poly.list)
+point.df <- do.call(rbind, point.list)
+
+animint(
+  ggplot()+
+    geom_point(aes(
+      col, row, fill=factor(num)),
+      data=point.df,
+      color="red", size=3)+
+    geom_polygon(aes(
+      x, y, group=group, subgroup=subgroup, tooltip=group),
+      data=poly.df,
+      alpha=0.5,
+      fill="steelblue")+
+    xlab("Three contour polygons: island (left), hole (middle), filled (right)")+
+    theme_animint(width=800, height=300)
+)
+```
+
+From left to right:
+
+- **island** has a hole with a filled island inside it.
+- **hole** is a filled ring with an empty interior.
+- **filled** has no hole.
+
+Red points mark the grid. Hover a point inside a hole: there should be no polygon tooltip. Hover a filled cell: the tooltip should show `island`, `hole`, or `filled`.
+
+## The problem
+
+In ggplot2, polygons with holes use the `subgroup` aesthetic: one outer ring and one or more inner rings. animint2 did not fully support that path for interactive SVG output.
+
+Without holes:
+
+- Inner regions were still treated as filled.
+- Hit-testing and tooltips could appear **inside** areas that should be empty.
+- Maps and contour-style polygons looked wrong in the interactive plot.
+
+We needed the outer ring filled and the holes empty, including for mouse interaction and tooltips.
+
+## How to use it
+
+Same idea as ggplot2: `group` identifies each polygon, and `subgroup` distinguishes the outer ring from hole rings.
+
+```{r square-hole}
+square.hole <- data.frame(
+  x=c(0, 4, 4, 0,  1.2, 2.8, 2.8, 1.2),
+  y=c(0, 0, 4, 4,  1.2, 1.2, 2.8, 2.8),
+  subgroup=c(rep("outer", 4), rep("inner", 4)),
+  region="square")
+
+animint(
+  ggplot()+
+    geom_polygon(aes(
+      x, y, group=region, subgroup=subgroup,
+      tooltip="filled region (not the hole)"),
+      data=square.hole,
+      fill="steelblue",
+      alpha=0.7)+
+    coord_equal()+
+    ggtitle("A square with a square hole")+
+    theme_animint(width=360, height=360)
+)
+```
+
+## The approach
+
+The fix spans **R** (data and metadata) and **JavaScript** (SVG rendering), plus a **renderer test** that checks interactive behavior.
+
+### 1. R: recognize `subgroup` for polygons
+
+In `geom_polygon`, `subgroup` was added to the default aesthetics. When polygon data actually contains a `subgroup` column, the compiler sets a flag and stores subgroup as character data so the JS side knows holes are present:
+
+```r
+if(g$geom == "polygon" && "subgroup" %in% names(g.data)){
+  g$data_has_subgroup <- TRUE
+  g.data$subgroup <- as.character(g.data$subgroup)
+  g$types[["subgroup"]] <- "character"
+}
+```
+
+### 2. JavaScript: GeoJSON + even-odd fill
+
+For normal polygons we still build a simple SVG path. For polygons with holes we:
+
+1. Nest points by `subgroup` (outer ring + hole rings).
+2. Build a GeoJSON `Polygon` (closed rings).
+3. Render with `d3.geo.path()`.
+4. Set SVG `fill-rule: evenodd` so holes stay unfilled.
+
+```javascript
+if(g_info.geom === "polygon" && g_info.data_has_subgroup){
+  var geoPath = d3.geo.path().projection(null);
+  eActions = function(e){
+    e.attr("d", function(d){
+      var points = keyed_data[d.value];
+      var nested = d3.nest()
+        .key(function(pt){ return pt.subgroup; })
+        .entries(points);
+      var coords = nested.map(function(group){
+        var ring = group.values.map(function(pt){
+          return [scales.x(pt.x), scales.y(pt.y)];
+        });
+        if(ring.length > 0){
+          ring = ring.concat([ring[0]]);
+        }
+        return ring;
+      });
+      var geojson = {
+        type: "Polygon",
+        coordinates: coords
+      };
+      return geoPath(geojson);
+    })
+    .style("fill-rule", "evenodd");
+  };
+}
+```
+
+That is what makes both the drawing and the click/tooltip behavior respect the hole. `fill-rule: evenodd` is not only a visual detail: in SVG it also controls hit-testing.
+
+### 3. Testing: prove holes are really holes
+
+Toby designed a stronger test than a simple visual check. The test builds the three contour-style polygons above (`island`, `hole`, `filled`), overlays points, and uses helpers like `tooltipID()` / `mouseMoved()` to assert:
+
+- tooltip opacity is high on filled cells (`num == 1`);
+- tooltip stays off inside holes and background (`num == 0`);
+- tooltip text matches the polygon group where expected.
+
+So CI verifies interactive behavior, not only that a path string exists.
+
+## What shipped in PR #328
+
+Merged as version **2026.6.28**, touching 7 files (~159 insertions):
+
+| Area | Change |
+|------|--------|
+| `R/geom-polygon.r`, `R/geom-.r` | `subgroup` aesthetic + `data_has_subgroup` |
+| `inst/htmljs/animint.js` | `d3.geo.path` + evenodd for hole polygons |
+| `helper-functions.R` | `tooltipID()`, mouse event helpers |
+| `test-renderer-polygon-holes.R` | renderer test for holes vs filled regions |
+| `DESCRIPTION` / `NEWS.md` | version, news, contributor credit |
+
+## Challenges along the way
+
+This PR taught me as much about open-source process as about SVG.
+
+1. **Matching the requested JS style.** An early path-string approach was replaced with `d3.geo.path()`, matching the preferred design from related work and review feedback.
+
+2. **Keeping the diff focused.** Porting between branches created a noisy Files changed history. Cleaning that so the PR only showed the real polygon-hole work was important for review.
+
+3. **CI vs real bugs.** After merge conflicts and DESCRIPTION fixes (author-list syntax, blank lines that broke `pak`), the main test suite went green. Remaining atime noise was a known infrastructure issue ([#340](https://github.com/animint/animint2/issues/340)), not a hole-rendering bug.
+
+4. **Credit and git email.** The PR was opened by Toby as a strong failing test on master; my implementation landed on that branch. Contributor credit is recorded in `NEWS` and `DESCRIPTION`. Separately, some commits used a mistyped email, so GitHub did not always link them to my profile—something I will keep consistent going forward.
+
+## What I learned
+
+- Interactive graphics need **data (R)**, **rendering (JS)**, and **behavior tests** to stay correct together.
+- SVG details like `fill-rule: evenodd` are not cosmetic—they define hit-testing.
+- Good mentor tests that fail before a fix (and pass after) make review much clearer.
+- Small packaging mistakes (`DESCRIPTION` commas / blank lines) can block an otherwise correct feature on CI.
+
+## Closing
+
+I am grateful that [PR #328](https://github.com/animint/animint2/pull/328) is merged and that animint2 users can now draw polygons with holes via `subgroup`, with tooltips that respect those holes.
+
+Thanks to [Toby Dylan Hocking](https://github.com/tdhock) and the animint community for the reviews, tests, and patience through the polish cycle.
+
+**Links**
+
+- PR: <https://github.com/animint/animint2/pull/328>
+- Issue: <https://github.com/animint/animint2/issues/252>
+- GSoC updates: <https://github.com/animint/animint2/issues/322>
+- Package: <https://animint.github.io/animint2/>
