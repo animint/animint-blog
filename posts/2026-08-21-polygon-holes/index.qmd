@@ -64,9 +64,9 @@ poly.df <- do.call(rbind, poly.list)
 point.df <- do.call(rbind, point.list)
 
 animint(
-  ggplot()+
+  contours=ggplot()+
     geom_point(aes(
-      col, row, fill=factor(num)),
+      col, row, fill=num),
       data=point.df,
       color="red", size=3)+
     geom_polygon(aes(
@@ -111,7 +111,7 @@ square.hole <- data.frame(
   region="square")
 
 animint(
-  ggplot()+
+  square=ggplot()+
     geom_polygon(aes(
       x, y, group=region, subgroup=subgroup,
       tooltip="filled region (not the hole)"),
