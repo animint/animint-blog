@@ -87,21 +87,27 @@ From left to right:
 
 Red points mark the grid. Hover a point inside a hole: there should be no polygon tooltip. Hover a filled cell: the tooltip should show `island`, `hole`, or `filled`.
 
-## The problem
+## Why this is useful
 
-In ggplot2, polygons with holes use the `subgroup` aesthetic: one outer ring and one or more inner rings. animint2 did not fully support that path for interactive SVG output.
+A polygon with a hole is any filled region that should stay **empty on the inside**: land around a lake, a country around an enclave, a building around a courtyard, or a contour ring around a valley.
 
-Without holes:
+That is not only a drawing problem. In an interactive plot, the hole has to behave as empty too. If the lake is still treated as part of the country, then:
 
-- Inner regions were still treated as filled.
-- Hit-testing and tooltips could appear **inside** areas that should be empty.
-- Maps and contour-style polygons looked wrong in the interactive plot.
+- the lake is painted with the country's color;
+- hovering the lake shows the country's tooltip;
+- clicking the lake selects the country.
 
-We needed the outer ring filled and the holes empty, including for mouse interaction and tooltips.
+With holes, the filled land responds to the mouse, and the cutout does not. That is what you want in choropleth maps, spatial data with inland water, and contour-style graphics where some cells are inside a ring and some are not.
+
+The plots in this post are small examples of that idea. Hover a hole: nothing. Hover the blue fill: a tooltip. The same rule applies to clicks and other mouse interactions.
 
 ## How to use it
 
-Same idea as ggplot2: `group` identifies each polygon, and `subgroup` distinguishes the outer ring from hole rings.
+Same idea as ggplot2: `group` identifies each polygon (one filled region), and `subgroup` distinguishes the outer ring from hole rings. The first subgroup is the outer boundary; later subgroups are holes. Several separate polygons each get their own `group`. If you leave `subgroup` off, inner rings are filled as well.
+
+You do not need a special geom. Use `geom_polygon()` as usual, add `subgroup`, and tooltips or selection on that layer will already skip the holes.
+
+The square below is the same idea with no contour machinery: outer ring filled, inner ring empty. Hover the blue fill versus the hole.
 
 ```{r square-hole}
 square.hole <- data.frame(
@@ -124,9 +130,29 @@ animint(
 )
 ```
 
+## The problem
+
+In ggplot2, polygons with holes use the `subgroup` aesthetic: one outer ring and one or more inner rings. animint2 did not fully support that path for interactive SVG output.
+
+That gap has a timeline. The original `animint` package (2013) depended on ggplot2. Incompatible ggplot2 changes in 2014–2017 led to the **2018** `animint2` fork, which copies the relevant ggplot2 code and no longer tracks ggplot2 releases. ggplot2 then added `geom_polygon(aes(subgroup=...))` in [**3.2.0 (June 2019)**](https://www.tidyverse.org/blog/2019/06/ggplot2-3-2-0/), after R 3.6 gained `grid::pathGrob()` support for holes. Because that landed after the fork, animint2's interactive renderer never picked it up until [issue #252](https://github.com/animint/animint2/issues/252) / [PR #328](https://github.com/animint/animint2/pull/328) in 2026.
+
+Without holes in the SVG output:
+
+- Inner regions were still treated as filled.
+- Hit-testing and tooltips could appear **inside** areas that should be empty.
+- Maps and contour-style polygons looked wrong in the interactive plot.
+
+We needed the outer ring filled and the holes empty, including for mouse interaction and tooltips.
+
+## How it works
+
+From the user's point of view, a hole is just an inner boundary that should stay empty. The renderer treats that inner region as not part of the polygon: it is not painted, and the mouse does not hit it. That is why a tooltip can appear on land and disappear over a lake, without any extra click-handling code on your side.
+
+Under the hood the compiler notices when polygon data have a `subgroup` column, and the browser draws those rings with even-odd fill so holes stay empty for both painting and hit-testing.
+
 ## The approach
 
-The fix spans **R** (data and metadata) and **JavaScript** (SVG rendering), plus a **renderer test** that checks interactive behavior.
+The fix spans **R** (data and metadata) and **JavaScript** (SVG rendering).
 
 ### 1. R: recognize `subgroup` for polygons
 
@@ -177,30 +203,6 @@ if(g_info.geom === "polygon" && g_info.data_has_subgroup){
   };
 }
 ```
-
-That is what makes both the drawing and the click/tooltip behavior respect the hole. `fill-rule: evenodd` is not only a visual detail: in SVG it also controls hit-testing.
-
-### 3. Testing: prove holes are really holes
-
-Toby designed a stronger test than a simple visual check. The test builds the three contour-style polygons above (`island`, `hole`, `filled`), overlays points, and uses helpers like `tooltipID()` / `mouseMoved()` to assert:
-
-- tooltip opacity is high on filled cells (`num == 1`);
-- tooltip stays off inside holes and background (`num == 0`);
-- tooltip text matches the polygon group where expected.
-
-So CI verifies interactive behavior, not only that a path string exists.
-
-## What shipped in PR #328
-
-Merged as version **2026.6.28**, touching 7 files (~159 insertions):
-
-| Area | Change |
-|------|--------|
-| `R/geom-polygon.r`, `R/geom-.r` | `subgroup` aesthetic + `data_has_subgroup` |
-| `inst/htmljs/animint.js` | `d3.geo.path` + evenodd for hole polygons |
-| `helper-functions.R` | `tooltipID()`, mouse event helpers |
-| `test-renderer-polygon-holes.R` | renderer test for holes vs filled regions |
-| `DESCRIPTION` / `NEWS.md` | version, news, contributor credit |
 
 ## Challenges along the way
 
