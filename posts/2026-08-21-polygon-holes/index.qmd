@@ -63,6 +63,7 @@ point.df <- do.call(rbind, point.list)
 
 animint(
   contours=ggplot()+
+    scale_fill_manual(breaks=0:1)+ # to emphasize that these are the only two data values
     geom_point(aes(
       col, row, fill=num),
       data=point.df,
