@@ -56,7 +56,7 @@ for(grp.i in seq_along(m.list)){
   point.list[[grp.i]] <- data.frame(
     row=as.integer(row(m)),
     col=as.integer(col(m)) + offset,
-    num=as.numeric(m),
+    num=factor(as.numeric(m), levels=c(0, 1)),
     group=group)
 }
 poly.df <- do.call(rbind, poly.list)
@@ -64,7 +64,9 @@ point.df <- do.call(rbind, point.list)
 
 animint(
   contours=ggplot()+
-    scale_fill_manual(breaks=0:1)+ # to emphasize that these are the only two data values
+    scale_fill_manual(
+      values=c("0"="white", "1"="black"),
+      breaks=c("0", "1"))+ # only two data values
     geom_point(aes(
       col, row, fill=num),
       data=point.df,
