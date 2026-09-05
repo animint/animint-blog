@@ -47,11 +47,13 @@ for(grp.i in seq_along(m.list)){
   group <- names(m.list)[[grp.i]]
   m <- m.list[[grp.i]]
   clines <- contourLines(1:ncol(m), 1:nrow(m), m, levels=0.5)
-  poly.list[[grp.i]] <- data.table(subgroup=seq_along(clines))[, data.table(
-      group,
+  poly.list[[grp.i]] <- do.call(rbind, lapply(seq_along(clines), function(subgroup){
+    data.frame(
+      subgroup=subgroup,
+      group=group,
       x=clines[[subgroup]]$x + offset,
       y=clines[[subgroup]]$y)
-  ), by=subgroup]
+  }))
   point.list[[grp.i]] <- data.frame(
     row=as.integer(row(m)),
     col=as.integer(col(m)) + offset,
