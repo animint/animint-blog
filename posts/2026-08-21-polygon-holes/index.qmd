@@ -3,6 +3,7 @@ title: "Drawing polygons with holes in animint2"
 author: "Nishita Shah"
 date: "2026-08-21"
 categories: [gsoc, animint]
+image: "2026-08-21-polygon-holes.png"
 ---
 
 During [Google Summer of Code 2026](https://github.com/animint/animint2/issues/322) I worked on [animint2](https://github.com/animint/animint2), an R package for animated, interactive grammar-of-graphics visualizations that render in the browser with D3.
